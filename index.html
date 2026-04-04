@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Recorder - FastAPI Integration</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 500px;
+      width: 100%;
+    }
+
+    h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 25px;
+    }
+
+    button {
+      flex: 1;
+      padding: 12px 20px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    #startBtn {
+      background: #667eea;
+      color: white;
+    }
+
+    #startBtn:hover:not(:disabled) {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    #startBtn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #stopBtn {
+      background: #f56565;
+      color: white;
+    }
+
+    #stopBtn:hover:not(:disabled) {
+      background: #e84e4e;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(245, 101, 101, 0.4);
+    }
+
+    #stopBtn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .status-container {
+      background: #f7fafc;
+      border-left: 4px solid #667eea;
+      padding: 15px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+    }
+
+    #status {
+      margin: 0;
+      font-size: 15px;
+      color: #2d3748;
+      font-weight: 500;
+    }
+
+    .audio-preview {
+      margin-top: 25px;
+      padding-top: 25px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    .audio-preview h3 {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 10px;
+      border-radius: 6px;
+    }
+
+    .error {
+      color: #e53e3e;
+      background: #fff5f5;
+      border-left-color: #e53e3e;
+    }
+
+    .success {
+      color: #22863a;
+      background: #f6f8fa;
+      border-left-color: #28a745;
+    }
+
+    .info {
+      color: #0366d6;
+      background: #f6f8fa;
+      border-left-color: #0366d6;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🎤 Audio Recorder</h1>
+  <p class="subtitle">Record audio and send to FastAPI backend</p>
+
+  <div class="button-group">
+    <button id="startBtn" onclick="startRecording()">Start Recording</button>
+    <button id="stopBtn" onclick="stopRecording()" disabled>Stop Recording</button>
+  </div>
+
+  <div class="status-container">
+    <p id="status">Ready to record</p>
+  </div>
+
+  <div class="audio-preview" id="audioPreviewContainer" style="display: none;">
+    <h3>Recorded Audio</h3>
+    <audio id="audioPlayback" controls></audio>
+  </div>
+</div>
+
+<script>
+  // =========================================================================
+  // STATE MANAGEMENT
+  // =========================================================================
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let mediaStream = null;
+
+  const BACKEND_URL = "http://localhost:8000/process-audio";
+  const FRONTEND_URL = "http://localhost:3000";
+
+  // =========================================================================
+  // DOM ELEMENTS
+  // =========================================================================
+  const statusElement = document.getElementById("status");
+  const startBtn = document.getElementById("startBtn");
+  const stopBtn = document.getElementById("stopBtn");
+  const audioPreviewContainer = document.getElementById("audioPreviewContainer");
+  const audioPlayback = document.getElementById("audioPlayback");
+
+  // =========================================================================
+  // UTILITY FUNCTIONS
+  // =========================================================================
+
+  /**
+   * Update status message with appropriate styling
+   * @param {string} message - Status message to display
+   * @param {string} type - Type of message: 'info', 'success', 'error'
+   */
+  function updateStatus(message, type = "info") {
+    statusElement.textContent = message;
+    const statusContainer = document.querySelector(".status-container");
+    statusContainer.classList.remove("error", "success", "info");
+    statusContainer.classList.add(type);
+  }
+
+  /**
+   * Update button states
+   * @param {boolean} recording - Whether currently recording
+   */
+  function updateButtons(recording) {
+    startBtn.disabled = recording;
+    stopBtn.disabled = !recording;
+  }
+
+  /**
+   * Stop all media streams cleanly
+   */
+  function stopAllMediaStreams() {
+    if (mediaStream) {
+      mediaStream.getTracks().forEach((track) => {
+        track.stop();
+      });
+      mediaStream = null;
+    }
+  }
+
+  // =========================================================================
+  // RECORDING FUNCTIONS
+  // =========================================================================
+
+  /**
+   * Start recording audio from user's microphone
+   */
+  async function startRecording() {
+    try {
+      // Request microphone access
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+      // Create MediaRecorder instance
+      mediaRecorder = new MediaRecorder(mediaStream);
+
+      // Reset audio chunks array
+      audioChunks = [];
+
+      // Collect audio data in chunks
+      mediaRecorder.ondataavailable = (event) => {
+        audioChunks.push(event.data);
+      };
+
+      // Handle recording stop
+      mediaRecorder.onstop = handleRecordingStop;
+
+      // Start recording
+      mediaRecorder.start();
+
+      updateStatus("🎤 Recording... Click Stop when done", "info");
+      updateButtons(true);
+
+      console.log("✅ Recording started");
+    } catch (error) {
+      console.error("❌ Recording error:", error);
+
+      if (error.name === "NotAllowedError") {
+        updateStatus(
+          "Microphone access denied. Please allow microphone access.",
+          "error"
+        );
+      } else if (error.name === "NotFoundError") {
+        updateStatus("No microphone found. Please connect one.", "error");
+      } else {
+        updateStatus(`Error: ${error.message}`, "error");
+      }
+
+      updateButtons(false);
+    }
+  }
+
+  /**
+   * Stop recording and handle audio processing
+   */
+  function stopRecording() {
+    if (!mediaRecorder || mediaRecorder.state === "inactive") {
+      updateStatus("No active recording", "error");
+      return;
+    }
+
+    mediaRecorder.stop();
+    updateStatus("⏹️ Recording stopped. Processing...", "info");
+    updateButtons(false);
+
+    // Clean up media stream
+    stopAllMediaStreams();
+  }
+
+  /**
+   * Handle the recording stop event and process audio
+   */
+  async function handleRecordingStop() {
+    try {
+      // Create audio blob from chunks
+      const audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+
+      if (audioBlob.size === 0) {
+        updateStatus("Recording is empty. Try again.", "error");
+        return;
+      }
+
+      console.log(`📦 Audio blob created: ${audioBlob.size} bytes`);
+
+      // Display audio preview
+      const audioURL = URL.createObjectURL(audioBlob);
+      audioPlayback.src = audioURL;
+      audioPreviewContainer.style.display = "block";
+
+      // Play audio immediately
+      audioPlayback.play();
+      console.log("🔊 Playing back audio");
+
+      // Send to backend
+      await sendAudioToBackend(audioBlob);
+    } catch (error) {
+      console.error("❌ Error processing audio:", error);
+      updateStatus(`Error: ${error.message}`, "error");
+    }
+  }
+
+  // =========================================================================
+  // BACKEND COMMUNICATION
+  // =========================================================================
+
+  /**
+   * Send audio blob to FastAPI backend via POST request
+   * @param {Blob} audioBlob - Audio blob to send
+   */
+  async function sendAudioToBackend(audioBlob) {
+    try {
+      updateStatus("📤 Sending to backend...", "info");
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append("file", audioBlob, "meeting.webm");
+
+      // Send POST request
+      const response = await fetch(BACKEND_URL, {
+        method: "POST",
+        body: formData,
+      });
+
+      // Handle response
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+        );
+      }
+
+      const result = await response.json();
+
+      console.log("✅ Backend response:", result);
+
+      // Display transcribed text if available
+      if (result.text) {
+        updateStatus(
+          `✅ Success! Transcribed: "${result.text}"`,
+          "success"
+        );
+        console.log("📝 Transcribed text:", result.text);
+      } else {
+        updateStatus(`✅ File sent successfully to ${result.file_path}`, "success");
+      }
+    } catch (error) {
+      console.error("❌ Backend communication error:", error);
+      updateStatus(`Backend error: ${error.message}`, "error");
+    }
+  }
+
+  // =========================================================================
+  // INITIALIZATION
+  // =========================================================================
+
+  // Log that the page is ready
+  console.log("🚀 Audio Recorder loaded");
+  console.log(`Backend URL: ${BACKEND_URL}`);
+
+  // Check browser support
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    updateStatus(
+      "Your browser does not support audio recording. Please use Chrome, Firefox, or Edge.",
+      "error"
+    );
+    startBtn.disabled = true;
+  }
+</script>
+
+</body>
+</html>
