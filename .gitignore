@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+uploads/
+.env
+chunks/
+node_modules/
+dist/
+build/

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import { Link } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -27,6 +28,7 @@ export function Meetings() {
   const { theme, compactMode } = useTheme();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState("all");
   const [showNewMeetingModal, setShowNewMeetingModal] = useState(false);
@@ -146,6 +148,8 @@ export function Meetings() {
       });
 
       fetchMeetings();
+      // After creating a meeting, navigate to transcription
+      navigate("/transcription");
     } catch (error) {
       console.error("Error creating meeting:", error);
     }
@@ -170,7 +174,9 @@ export function Meetings() {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => setShowNewMeetingModal(true)}
+          onClick={() => {
+            setShowNewMeetingModal(true);
+          }}
           className={`${compactMode ? 'px-3 py-1.5 text-sm' : 'px-4 py-2'} bg-gradient-to-r from-blue-500 to-purple-600 text-white ${compactMode ? 'rounded-lg' : 'rounded-xl'} shadow-md hover:shadow-lg transition-all flex items-center gap-2`}
         >
           <Plus className={`${compactMode ? 'w-3 h-3' : 'w-4 h-4'}`} />
