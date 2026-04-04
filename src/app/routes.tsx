@@ -15,6 +15,8 @@ import { Signup } from "./components/Signup";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { DiagnosticPage } from "./components/DiagnosticPage";
 
+import MeetingTranscription from "./components/MeetingTranscription";
+
 export const router = createBrowserRouter([
   {
     path: "/diagnostic",
@@ -38,6 +40,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Overview /> },
       { path: "meetings", element: <Meetings /> },
+      { path: "transcription", element: <MeetingTranscription /> },
       { path: "meetings/:id", element: <MeetingDetail /> },
       { path: "actions", element: <ActionItems /> },
       { path: "calendar", element: <Calendar /> },
