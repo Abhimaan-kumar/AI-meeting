@@ -4,7 +4,8 @@ FastAPI application for audio upload, processing, and transcription with backgro
 """
 
 import logging
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import os
+from fastapi import FastAPI, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from bson.objectid import ObjectId
 from bson.errors import InvalidId
@@ -322,6 +323,95 @@ def get_meeting(meeting_id: str):
             status_code=500,
             detail=f"Failed to retrieve meeting: {str(e)}"
         )
+
+
+# ============================================================================
+# WEBSOCKET ENDPOINT - REAL-TIME AUDIO STREAMING
+# ============================================================================
+@app.websocket("/ws/audio")
+async def websocket_audio_handler(websocket: WebSocket):
+    """
+    WebSocket endpoint for receiving real-time audio chunks from browser.
+    
+    Frontend sends binary audio chunks (WebM format) via MediaRecorder.
+    Each chunk is saved to disk as: chunks/chunk_<counter>.webm
+    
+    Usage from browser:
+    - Connect to: ws://localhost:8000/ws/audio
+    - Send binary chunks using: websocket.send_bytes(chunk_data)
+    
+    Files saved here can be manually tested for playback.
+    If files have no sound → likely frontend issue (tab audio not enabled in getDisplayMedia).
+    """
+    print("\n" + "="*80)
+    print("🔌 [WebSocket] Endpoint hit - /ws/audio")
+    print("="*80)
+    logger.info("🔌 WebSocket endpoint hit")
+    
+    try:
+        await websocket.accept()
+        print("✅ [WebSocket] Connection accepted")
+        logger.info("✅ Client connected to audio stream")
+        
+        # Create chunks directory if it doesn't exist
+        chunks_dir = "chunks"
+        os.makedirs(chunks_dir, exist_ok=True)
+        
+        chunk_counter = 0
+        print(f"📂 Chunks directory ready: {chunks_dir}")
+        
+        while True:
+            try:
+                # Receive binary audio chunk from browser
+                data = await websocket.receive_bytes()
+                
+                if data:
+                    chunk_counter += 1
+                    chunk_size = len(data)
+                    
+                    # Log with both print and logger
+                    msg = f"📨 Received chunk {chunk_counter} | size: {chunk_size} bytes"
+                    print(msg)
+                    logger.info(msg)
+                    
+                    # Save chunk to disk with counter
+                    chunk_filename = f"{chunks_dir}/chunk_{chunk_counter}.webm"
+                    try:
+                        with open(chunk_filename, "wb") as f:
+                            f.write(data)
+                        logger.debug(f"💾 Saved: {chunk_filename}")
+                    except IOError as e:
+                        error_msg = f"❌ Failed to save chunk {chunk_counter}: {str(e)}"
+                        print(error_msg)
+                        logger.error(error_msg)
+                        # Continue receiving even if save fails
+                        
+            except Exception as inner_error:
+                error_msg = f"❌ Error receiving chunk: {str(inner_error)}"
+                print(error_msg)
+                logger.error(error_msg)
+                break
+            
+    except WebSocketDisconnect:
+        disconnect_msg = f"🔌 Client disconnected after receiving {chunk_counter} chunks"
+        print(disconnect_msg)
+        logger.info(disconnect_msg)
+        
+    except Exception as e:
+        error_msg = f"❌ WebSocket error: {str(e)}"
+        print(error_msg)
+        logger.error(error_msg, exc_info=True)
+        
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass  # Connection already closed
+        
+        final_msg = f"📊 Audio stream session ended | Total chunks received: {chunk_counter}"
+        print(final_msg)
+        print("="*80 + "\n")
+        logger.info(final_msg)
 
 
 # ============================================================================
