@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+groq
+faster-whisper
+pydantic
+python-multipart
+requests
+openai
