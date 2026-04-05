@@ -1,0 +1,20 @@
+[
+  {
+    "recording_url": "https://example.com/#flowstate-demo-recording-001",
+    "meeting_title": "Webhook Integration Test",
+    "transcript_text": "This is a test transcript from the local webhook validation.",
+    "received_at": "2026-04-05T00:10:33.953726+00:00"
+  },
+  {
+    "recording_url": "https://example.com/#flowstate-step5-expected-keys",
+    "meeting_title": "Step 5 Expected Payload Test",
+    "transcript_text": "Transcript body from expected-key payload.",
+    "received_at": "2026-04-05T00:43:45.617664+00:00"
+  },
+  {
+    "recording_url": "https://example.com/#flowstate-step6-alt-keys",
+    "meeting_title": "Step 6 Alternate Payload Test",
+    "transcript_text": "Transcript body from alternate-key payload.",
+    "received_at": "2026-04-05T00:44:33.461000+00:00"
+  }
+]
